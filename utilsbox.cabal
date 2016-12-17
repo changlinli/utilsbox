@@ -59,7 +59,7 @@ executable utilsbox
   -- Other library packages from which modules are imported.
   build-depends:       base >=4.9 && <4.10,
                        free == 4.*,
-                       optparse-applicative == 0.13.*
+                       optparse-applicative >= 0.12 && < 0.14
   
   -- Directories containing source files.
   -- hs-source-dirs:      
