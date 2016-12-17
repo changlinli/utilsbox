@@ -1,7 +1,8 @@
 {-# LANGUAGE DeriveFunctor #-}
 module System.UtilsBox.Ls where
 
-import Prelude hiding (getLine)
+import Prelude hiding (getLine, print)
+import qualified Prelude as P
 
 import           Control.Monad
 import qualified Control.Monad.Free as F
@@ -46,7 +47,7 @@ fileSysIOF (GetDirectoryContents path io) = do
     io result
 
 teletypeIOF :: TeletypeAPI (IO a) -> IO a
-teletypeIOF (Print x io) = Prelude.print x >> io
+teletypeIOF (Print x io) = P.print x >> io
 
 runIOF :: Sum TeletypeAPI FileSystemAPI (IO a) -> IO a
 runIOF (InL teletype) = teletypeIOF teletype
@@ -66,7 +67,7 @@ fileSysIOFA (GetDirectoryContents path next) = do
     return $ next result
 
 teletypeIOFA :: TeletypeAPI a -> IO a
-teletypeIOFA (Print x next) = Prelude.print x >> return next
+teletypeIOFA (Print x next) = P.print x >> return next
 teletypeIOFA (GetChar result) = getChar >>= (fmap return result)
 
 runIOFA :: (Sum TeletypeAPI FileSystemAPI) a -> IO a
@@ -101,8 +102,41 @@ fileSysList (GetDirectoryContents path next) = undefined
 
 -- And finally...
 
+data LsOptions = LsOptions
+    { verboseFlag :: Bool
+    }
+
+lsOptions :: OA.Parser LsOptions
+lsOptions = LsOptions <$> OA.switch ( OA.long "verbose" <> OA.short 'v' <> OA.help "Turn on verbose output." )
+
+lsOptionsInfo :: OA.ParserInfo LsOptions
+lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "List all files in a directory" <> OA.header "Thingies!" )
+
+getProgramArgs :: TeletypeAPIM [String]
+getProgramArgs = fmap return getLine
+
+handleParserTeletype :: OA.ParserResult a -> TeletypeAPIM (Either String a)
+handleParserTeletype (OA.Success a) = return . Right $ a
+handleParserTeletype (OA.Failure failure) = do
+    progn <- return "hello!"
+    let (msg, exit) = OA.renderFailure failure progn
+    return (Left msg)
+
+execParserTeletype :: OA.ParserInfo a -> TeletypeAPIM (Either String a)
+execParserTeletype info = do
+    programArgs <- getProgramArgs
+    let result = OA.execParserPure OA.defaultPrefs info programArgs
+    handleParserTeletype result
+
 ls :: F.Free (Sum TeletypeAPI FileSystemAPI) ()
 ls = do
+    lsOpts <- F.hoistFree InL $ execParserTeletype lsOptionsInfo
+    case lsOpts of
+         Left error -> F.hoistFree InL $ print error
+         Right opts -> lsWithOpts opts
+
+lsWithOpts opts = do
+    _ <- if (verboseFlag opts) then F.hoistFree InL $ print "verbose!" else return ()
     path <- F.hoistFree InL getLine 
     allElemsOrErr <- F.hoistFree InR (getDirectoryContents path)
     case allElemsOrErr of 
