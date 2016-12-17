@@ -4,14 +4,18 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, base, free, optparse-applicative, stdenv }:
+  f = { mkDerivation, base, free, IOSpec, optparse-applicative
+      , stdenv
+      }:
       mkDerivation {
         pname = "utilsbox";
         version = "0.1.0.0";
         src = ./.;
         isLibrary = false;
         isExecutable = true;
-        executableHaskellDepends = [ base free optparse-applicative ];
+        executableHaskellDepends = [
+          base free IOSpec optparse-applicative
+        ];
         description = "A implementation of many system tools in a single executable. Inspired by busybox.";
         license = stdenv.lib.licenses.gpl3;
       };
