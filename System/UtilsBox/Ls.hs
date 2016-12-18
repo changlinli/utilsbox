@@ -15,9 +15,17 @@ import qualified Options.Applicative as OA
 import           Data.Monoid hiding (Sum)
 import           System.FilePath
 import           Data.Foldable (find)
+import qualified Data.Map as M
+
+data EnvironmentAPI next 
+    = GetEnvVariables ((M.Map String String) -> next)
+    | GetArgs ([String] -> next)
+    | Pwd (String -> next)
 
 data FileSystemAPI next
-    = GetDirectoryContents String (Either DirError [String] -> next) deriving Functor
+    = GetDirectoryContents String (Either DirError [String] -> next)
+    | ReadFile String (String -> next)
+    | WriteFile String String next deriving Functor
 
 data DirError
     = HardwareFault String
