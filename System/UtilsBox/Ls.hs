@@ -1,4 +1,9 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+-- This is scary, let's think about how to remove it...
+{-# LANGUAGE OverlappingInstances #-}
 module System.UtilsBox.Ls where
 
 import Prelude hiding (getLine, print)
@@ -114,6 +119,26 @@ data LsOptions = LsOptions
     { verboseFlag :: Bool
     }
 
+data (f :+: g) e = Inl (f e) | Inr (g e)
+
+infixr 6 :+:
+
+instance (Functor f, Functor g) => Functor (f :+: g) where
+    fmap f (Inl x) = Inl $ fmap f x
+    fmap f (Inr x) = Inr $ fmap f x
+
+class (Functor f, Functor g) => (:<:) f g where
+    inject :: f a -> g a
+
+instance Functor f => f :<: f where
+    inject = id
+
+instance (Functor f, Functor g) => f :<: (f :+: g) where
+    inject = Inl
+
+instance (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
+    inject = Inr . inject
+
 lsOptions :: OA.Parser LsOptions
 lsOptions = LsOptions <$> OA.switch ( OA.long "verbose" <> OA.short 'v' <> OA.help "Turn on verbose output." )
 
@@ -135,6 +160,22 @@ execParserTeletype info = do
     programArgs <- getProgramArgs
     let result = OA.execParserPure OA.defaultPrefs info programArgs
     handleParserTeletype result
+
+lsAlt :: F.Free (TeletypeAPI :+: FileSystemAPI) ()
+lsAlt = do
+    lsOpts <- F.hoistFree inject $ execParserTeletype lsOptionsInfo
+    case lsOpts of
+         Left error -> F.hoistFree inject $ print error
+         Right opts -> lsWithOptsAlt opts
+
+lsWithOptsAlt :: LsOptions -> F.Free (TeletypeAPI :+: FileSystemAPI) ()
+lsWithOptsAlt opts = do
+    _ <- if (verboseFlag opts) then F.hoistFree inject $ print "verbose!" else return()
+    path <- F.hoistFree inject getLine
+    allElemsOrErr <- F.hoistFree inject (getDirectoryContents path)
+    case allElemsOrErr of 
+         Right allElems -> F.liftF . inject $ Print (unlines allElems) ()
+         Left (DoesNotExist path) -> F.liftF . inject $ Print (path ++ " does not exist!") ()
 
 ls :: F.Free (Sum TeletypeAPI FileSystemAPI) ()
 ls = do
