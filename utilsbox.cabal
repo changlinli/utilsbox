@@ -60,7 +60,8 @@ executable utilsbox
   build-depends:       base >=4.9 && <4.10,
                        free == 4.*,
                        optparse-applicative >= 0.12 && < 0.14,
-                       IOSpec == 0.3.*
+                       IOSpec == 0.3.*,
+                       cryptohash == 0.11.*
   
   -- Directories containing source files.
   -- hs-source-dirs:      
