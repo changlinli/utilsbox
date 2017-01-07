@@ -8,23 +8,20 @@ module System.UtilsBox.Ls where
 import Prelude hiding (getLine, print)
 import qualified Prelude as P
 
-import           Control.Monad
 import qualified Control.Monad.Free as F
 import           Control.Monad.State
 import qualified System.Directory as SD
 import qualified System.IO.Error as SIE
-import           Test.IOSpec (Executable)
-import           Data.Functor.Sum
+import qualified System.Environment as SE
 import qualified Options.Applicative as OA
 import           Data.Monoid hiding (Sum)
-import           System.FilePath
 import           Data.Foldable (find)
 import qualified Data.Map as M
 
 data EnvironmentAPI next 
     = GetEnvVariables ((M.Map String String) -> next)
     | GetArgs ([String] -> next)
-    | Pwd (String -> next)
+    | Pwd (String -> next) deriving Functor
 
 data FileSystemAPI next
     = GetDirectoryContents String (Either DirError [String] -> next)
@@ -50,58 +47,38 @@ type TeletypeAPIM next = F.Free TeletypeAPI next
 print :: String -> TeletypeAPIM ()
 print x = F.liftF $ Print x ()
 
-fileSysIOF :: FileSystemAPI (IO a) -> IO a
-fileSysIOF (GetDirectoryContents path io) = do
-    filesOrErr <- SIE.tryIOError $ SD.getDirectoryContents path
-    let result = case filesOrErr of
-         Right files -> Right files
-         Left error -> Left . DoesNotExist $ path
-    io result
-
-teletypeIOF :: TeletypeAPI (IO a) -> IO a
-teletypeIOF (Print x io) = P.print x >> io
-
-runIOF :: Sum TeletypeAPI FileSystemAPI (IO a) -> IO a
-runIOF (InL teletype) = teletypeIOF teletype
-runIOF (InR filesys) = fileSysIOF filesys
-
-runIO :: F.Free (Sum TeletypeAPI FileSystemAPI) a -> IO a
-runIO = F.iterM runIOF
-
--- Or alternatively
-
-fileSysIOFA :: FileSystemAPI a -> IO a
-fileSysIOFA (GetDirectoryContents path next) = do
+fileSysIOF :: FileSystemAPI a -> IO a
+fileSysIOF (GetDirectoryContents path next) = do
     filesOrErr <- SIE.tryIOError $ SD.getDirectoryContents path
     let result = case filesOrErr of
          Right files -> Right files
          Left error -> Left . DoesNotExist $ path
     return $ next result
 
-teletypeIOFA :: TeletypeAPI a -> IO a
-teletypeIOFA (Print x next) = P.print x >> return next
-teletypeIOFA (GetChar result) = getChar >>= (fmap return result)
+teletypeIOF :: TeletypeAPI a -> IO a
+teletypeIOF (Print x next) = P.putStrLn x >> return next
+teletypeIOF (GetChar result) = getChar >>= (fmap return result)
 
-runIOFA :: (Sum TeletypeAPI FileSystemAPI) a -> IO a
-runIOFA (InL teletype) = teletypeIOFA teletype
-runIOFA (InR filesys) = fileSysIOFA filesys
+environmentIOF :: EnvironmentAPI a -> IO a
+environmentIOF (GetArgs next) = SE.getArgs >>= (fmap return next)
 
-runIOA :: F.Free (Sum TeletypeAPI FileSystemAPI) a -> IO a
-runIOA = F.foldFree runIOFA
+runIOF :: (TeletypeAPI :+: FileSystemAPI :+: EnvironmentAPI) a -> IO a
+runIOF (Inl teletype) = teletypeIOF teletype
+runIOF (Inr (Inl filesys)) = fileSysIOF filesys
+runIOF (Inr (Inr environment)) = environmentIOF environment
 
-runIOFD :: (TeletypeAPI :+: FileSystemAPI) a -> IO a
-runIOFD (Inl teletype) = teletypeIOFA teletype
-runIOFD (Inr filesys) = fileSysIOFA filesys
+runIO :: F.Free (TeletypeAPI :+: FileSystemAPI :+: EnvironmentAPI) a -> IO a
+runIO = F.foldFree runIOF
 
-runIOFD' :: F.Free (TeletypeAPI :+: FileSystemAPI) a -> IO a
-runIOFD' = F.foldFree runIOFD
-
-getLine :: F.Free TeletypeAPI String
+getLine :: (TeletypeAPI :<: f) => F.Free f String
 getLine = do
-    c <- F.liftF (GetChar id)
+    c <- F.liftF . inject $ (GetChar id)
     if c == '\n'
        then return ""
        else getLine >>= \line -> return (c : line)
+
+getArgs :: (EnvironmentAPI :<: f) => F.Free f [String]
+getArgs = F.liftF . inject $ GetArgs id
 
 teletypeString :: String -> TeletypeAPI a -> ([String], a)
 teletypeString [] (GetChar result) = ([],  '\0') >>= (fmap return result)
@@ -123,6 +100,7 @@ fileSysList (GetDirectoryContents path next) = undefined
 
 data LsOptions = LsOptions
     { verboseFlag :: Bool
+    , fileArgument :: String
     }
 
 data (f :+: g) e = Inl (f e) | Inr (g e)
@@ -146,59 +124,46 @@ instance {-# OVERLAPPABLE #-} (Functor f, Functor g, Functor h, f :<: g) => f :<
     inject = Inr . inject
 
 lsOptions :: OA.Parser LsOptions
-lsOptions = LsOptions <$> OA.switch ( OA.long "verbose" <> OA.short 'v' <> OA.help "Turn on verbose output." )
+lsOptions = LsOptions 
+    <$> OA.switch ( OA.long "verbose" <> OA.short 'v' <> OA.help "Turn on verbose output." )
+    <*> OA.argument OA.str (OA.metavar "FILE")
 
 lsOptionsInfo :: OA.ParserInfo LsOptions
 lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "List all files in a directory" <> OA.header "Thingies!" )
 
-getProgramArgs :: TeletypeAPIM [String]
+getProgramArgs :: TeletypeAPI :<: f => F.Free f [String]
 getProgramArgs = fmap return getLine
 
-handleParserTeletype :: OA.ParserResult a -> TeletypeAPIM (Either String a)
+handleParserTeletype :: (TeletypeAPI :<: f) => OA.ParserResult a -> F.Free f (Either String a)
 handleParserTeletype (OA.Success a) = return . Right $ a
 handleParserTeletype (OA.Failure failure) = do
-    progn <- return "hello!"
-    let (msg, exit) = OA.renderFailure failure progn
+    let programName = "ls"
+    let (msg, exit) = OA.renderFailure failure programName
     return (Left msg)
 
-execParserTeletype :: OA.ParserInfo a -> TeletypeAPIM (Either String a)
+execParserTeletype :: (TeletypeAPI :<: f, EnvironmentAPI :<: f) => OA.ParserInfo a -> F.Free f (Either String a)
 execParserTeletype info = do
-    programArgs <- getProgramArgs
+    programArgs <- getArgs
     let result = OA.execParserPure OA.defaultPrefs info programArgs
     handleParserTeletype result
 
-lsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f) => F.Free f ()
+lsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => F.Free f ()
 lsAlt = do
-    lsOpts <- F.hoistFree inject $ execParserTeletype lsOptionsInfo
+    lsOpts <- execParserTeletype lsOptionsInfo
     case lsOpts of
          Left error -> F.hoistFree inject $ print error
          Right opts -> lsWithOptsAlt opts
 
-lsWithOptsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f) => LsOptions -> F.Free f ()
+lsWithOptsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => LsOptions -> F.Free f ()
 lsWithOptsAlt opts = do
     _ <- if (verboseFlag opts) then F.hoistFree inject $ print "verbose!" else return()
-    path <- F.hoistFree inject getLine
+    let path = fileArgument opts
     allElemsOrErr <- F.hoistFree inject (getDirectoryContents path)
     case allElemsOrErr of 
          Right allElems -> F.liftF . inject $ Print (unlines allElems) ()
          Left (DoesNotExist path) -> F.liftF . inject $ Print (path ++ " does not exist!") ()
 
-ls :: F.Free (Sum TeletypeAPI FileSystemAPI) ()
-ls = do
-    lsOpts <- F.hoistFree InL $ execParserTeletype lsOptionsInfo
-    case lsOpts of
-         Left error -> F.hoistFree InL $ print error
-         Right opts -> lsWithOpts opts
-
-lsWithOpts opts = do
-    _ <- if (verboseFlag opts) then F.hoistFree InL $ print "verbose!" else return ()
-    path <- F.hoistFree InL getLine 
-    allElemsOrErr <- F.hoistFree InR (getDirectoryContents path)
-    case allElemsOrErr of 
-         Right allElems -> F.liftF . InL $ Print (unlines allElems) ()
-         Left (DoesNotExist path) -> F.liftF . InL $ Print (path ++ " does not exist!") ()
-
 -- And we can run this with runIOA ls
 
 lsIO :: IO ()
-lsIO = runIOFD' lsAlt
+lsIO = runIO lsAlt

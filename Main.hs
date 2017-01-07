@@ -1,4 +1,6 @@
 module Main where
 
+import System.UtilsBox.Ls (lsIO)
+
 main :: IO ()
-main = putStrLn "Hello, Haskell!"
+main = lsIO
