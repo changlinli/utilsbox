@@ -153,15 +153,15 @@ execParserTeletype info = do
     let result = OA.execParserPure OA.defaultPrefs info programArgs
     handleParserTeletype result
 
-lsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => F.Free f ()
-lsAlt = do
+lsF :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => F.Free f ()
+lsF = do
     lsOpts <- execParserTeletype lsOptionsInfo
     case lsOpts of
          Left error -> F.hoistFree inject $ print error
-         Right opts -> lsWithOptsAlt opts
+         Right opts -> lsFWithOpts opts
 
-lsWithOptsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => LsOptions -> F.Free f ()
-lsWithOptsAlt opts = do
+lsFWithOpts :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => LsOptions -> F.Free f ()
+lsFWithOpts opts = do
     _ <- if (verboseFlag opts) then F.hoistFree inject $ print "verbose!" else return()
     path <- case fileArgument opts of
                  Nothing -> pwd
@@ -174,4 +174,4 @@ lsWithOptsAlt opts = do
 -- And we can run this with runIOA ls
 
 lsIO :: IO ()
-lsIO = runIO lsAlt
+lsIO = runIO lsF
