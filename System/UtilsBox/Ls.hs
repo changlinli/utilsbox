@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 module System.UtilsBox.Ls where
 
 import Prelude hiding (getLine, print)
@@ -88,6 +89,13 @@ runIOFA (InR filesys) = fileSysIOFA filesys
 runIOA :: F.Free (Sum TeletypeAPI FileSystemAPI) a -> IO a
 runIOA = F.foldFree runIOFA
 
+runIOFD :: (TeletypeAPI :+: FileSystemAPI) a -> IO a
+runIOFD (Inl teletype) = teletypeIOFA teletype
+runIOFD (Inr filesys) = fileSysIOFA filesys
+
+runIOFD' :: F.Free (TeletypeAPI :+: FileSystemAPI) a -> IO a
+runIOFD' = F.foldFree runIOFD
+
 getLine :: F.Free TeletypeAPI String
 getLine = do
     c <- F.liftF (GetChar id)
@@ -159,14 +167,14 @@ execParserTeletype info = do
     let result = OA.execParserPure OA.defaultPrefs info programArgs
     handleParserTeletype result
 
-lsAlt :: F.Free (TeletypeAPI :+: FileSystemAPI) ()
+lsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f) => F.Free f ()
 lsAlt = do
     lsOpts <- F.hoistFree inject $ execParserTeletype lsOptionsInfo
     case lsOpts of
          Left error -> F.hoistFree inject $ print error
          Right opts -> lsWithOptsAlt opts
 
-lsWithOptsAlt :: LsOptions -> F.Free (TeletypeAPI :+: FileSystemAPI) ()
+lsWithOptsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f) => LsOptions -> F.Free f ()
 lsWithOptsAlt opts = do
     _ <- if (verboseFlag opts) then F.hoistFree inject $ print "verbose!" else return()
     path <- F.hoistFree inject getLine
@@ -191,3 +199,6 @@ lsWithOpts opts = do
          Left (DoesNotExist path) -> F.liftF . InL $ Print (path ++ " does not exist!") ()
 
 -- And we can run this with runIOA ls
+
+lsIO :: IO ()
+lsIO = runIOFD' lsAlt
