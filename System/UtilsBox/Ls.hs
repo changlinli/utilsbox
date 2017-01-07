@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE FlexibleContexts #-}
+
 module System.UtilsBox.Ls where
 
 import Prelude hiding (getLine, putStrLn)
@@ -16,7 +17,6 @@ import           Data.Foldable (find)
 import           System.UtilsBoxSpec.CoreTypes ((:<:), inject, (:+:) (Inl, Inr))
 import           System.UtilsBoxSpec.Teletype (TeletypeAPI, putStrLn, getLine, teletypeIOF)
 import           System.UtilsBoxSpec.Environment
-
 
 data FileSystemAPI next
     = GetDirectoryContents String (Either DirError [String] -> next)
@@ -114,8 +114,6 @@ lsFWithOpts opts = do
     case allElemsOrErr of 
          Right allElems -> putStrLn (unlines allElems)
          Left (DoesNotExist path) -> putStrLn (path ++ " does not exist!")
-
--- And we can run this with runIOA ls
 
 lsIO :: IO ()
 lsIO = runIO lsF
