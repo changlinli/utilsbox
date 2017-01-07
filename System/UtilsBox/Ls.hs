@@ -82,7 +82,7 @@ lsOptions = LsOptions
 lsOptionsInfo :: OA.ParserInfo LsOptions
 lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "List all files in a directory" <> OA.header "ls: A utility for listing files" )
 
-getProgramArgs :: TeletypeAPI :<: f => F.Free f [String]
+getProgramArgs :: (TeletypeAPI :<: f) => F.Free f [String]
 getProgramArgs = fmap return getLine
 
 handleParserTeletype :: (TeletypeAPI :<: f) => String -> OA.ParserResult a -> F.Free f (Either String a)

@@ -21,3 +21,8 @@ cabal.project.local
 
 # Vim
 *.swp
+
+# GHCJS files
+*.js_hi
+*.js_o
+*.jsexe
