@@ -4,8 +4,8 @@ let
 
   inherit (nixpkgs) pkgs;
 
-  f = { mkDerivation, base, free, IOSpec, optparse-applicative
-      , stdenv
+  f = { mkDerivation, base, cryptonite, free, IOSpec
+      , optparse-applicative, stdenv
       }:
       mkDerivation {
         pname = "utilsbox";
@@ -14,7 +14,7 @@ let
         isLibrary = false;
         isExecutable = true;
         executableHaskellDepends = [
-          base free IOSpec optparse-applicative
+          base cryptonite free IOSpec optparse-applicative
         ];
         description = "A implementation of many system tools in a single executable. Inspired by busybox.";
         license = stdenv.lib.licenses.gpl3;
