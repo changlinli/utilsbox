@@ -21,12 +21,14 @@ import qualified Data.Map as M
 data EnvironmentAPI next 
     = GetEnvVariables ((M.Map String String) -> next)
     | GetArgs ([String] -> next)
-    | Pwd (String -> next) deriving Functor
+    deriving Functor
 
 data FileSystemAPI next
     = GetDirectoryContents String (Either DirError [String] -> next)
     | ReadFile String (String -> next)
-    | WriteFile String String next deriving Functor
+    | WriteFile String String next
+    | Pwd (String -> next) 
+    deriving Functor
 
 data DirError
     = HardwareFault String
@@ -54,6 +56,7 @@ fileSysIOF (GetDirectoryContents path next) = do
          Right files -> Right files
          Left error -> Left . DoesNotExist $ path
     return $ next result
+fileSysIOF (Pwd next) = SD.getCurrentDirectory >>= (fmap return next)
 
 teletypeIOF :: TeletypeAPI a -> IO a
 teletypeIOF (Print x next) = P.putStrLn x >> return next
@@ -80,6 +83,9 @@ getLine = do
 getArgs :: (EnvironmentAPI :<: f) => F.Free f [String]
 getArgs = F.liftF . inject $ GetArgs id
 
+pwd :: (FileSystemAPI :<: f) => F.Free f String
+pwd = F.liftF . inject $ Pwd id
+
 teletypeString :: String -> TeletypeAPI a -> ([String], a)
 teletypeString [] (GetChar result) = ([],  '\0') >>= (fmap return result)
 teletypeString (x : xs) (GetChar result) = ([], x) >>= (fmap return result)
@@ -100,7 +106,7 @@ fileSysList (GetDirectoryContents path next) = undefined
 
 data LsOptions = LsOptions
     { verboseFlag :: Bool
-    , fileArgument :: String
+    , fileArgument :: Maybe String
     }
 
 data (f :+: g) e = Inl (f e) | Inr (g e)
@@ -126,10 +132,10 @@ instance {-# OVERLAPPABLE #-} (Functor f, Functor g, Functor h, f :<: g) => f :<
 lsOptions :: OA.Parser LsOptions
 lsOptions = LsOptions 
     <$> OA.switch ( OA.long "verbose" <> OA.short 'v' <> OA.help "Turn on verbose output." )
-    <*> OA.argument OA.str (OA.metavar "FILE")
+    <*> (OA.optional $ OA.argument OA.str (OA.metavar "FILE"))
 
 lsOptionsInfo :: OA.ParserInfo LsOptions
-lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "List all files in a directory" <> OA.header "Thingies!" )
+lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "List all files in a directory" <> OA.header "ls: A utility for listing files" )
 
 getProgramArgs :: TeletypeAPI :<: f => F.Free f [String]
 getProgramArgs = fmap return getLine
@@ -157,7 +163,9 @@ lsAlt = do
 lsWithOptsAlt :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => LsOptions -> F.Free f ()
 lsWithOptsAlt opts = do
     _ <- if (verboseFlag opts) then F.hoistFree inject $ print "verbose!" else return()
-    let path = fileArgument opts
+    path <- case fileArgument opts of
+                 Nothing -> pwd
+                 Just pathArg -> return pathArg
     allElemsOrErr <- F.hoistFree inject (getDirectoryContents path)
     case allElemsOrErr of 
          Right allElems -> F.liftF . inject $ Print (unlines allElems) ()
