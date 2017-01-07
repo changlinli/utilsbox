@@ -1,27 +1,22 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE TypeOperators #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 module System.UtilsBox.Ls where
 
-import Prelude hiding (getLine, print)
+import Prelude hiding (getLine, putStrLn)
 import qualified Prelude as P
 
 import qualified Control.Monad.Free as F
 import           Control.Monad.State
 import qualified System.Directory as SD
 import qualified System.IO.Error as SIE
-import qualified System.Environment as SE
 import qualified Options.Applicative as OA
 import           Data.Monoid hiding (Sum)
 import           Data.Foldable (find)
-import qualified Data.Map as M
+import           System.UtilsBoxSpec.CoreTypes ((:<:), inject, (:+:) (Inl, Inr))
+import           System.UtilsBoxSpec.Teletype (TeletypeAPI, putStrLn, getLine, teletypeIOF)
+import           System.UtilsBoxSpec.Environment
 
-data EnvironmentAPI next 
-    = GetEnvVariables ((M.Map String String) -> next)
-    | GetArgs ([String] -> next)
-    deriving Functor
 
 data FileSystemAPI next
     = GetDirectoryContents String (Either DirError [String] -> next)
@@ -40,15 +35,6 @@ type FileSystemAPIM next = F.Free FileSystemAPI next
 getDirectoryContents :: String -> FileSystemAPIM (Either DirError [String])
 getDirectoryContents path = F.liftF $ GetDirectoryContents path id
 
-data TeletypeAPI next
-    = Print String next 
-    | GetChar (Char -> next) deriving Functor
-
-type TeletypeAPIM next = F.Free TeletypeAPI next
-
-print :: String -> TeletypeAPIM ()
-print x = F.liftF $ Print x ()
-
 fileSysIOF :: FileSystemAPI a -> IO a
 fileSysIOF (GetDirectoryContents path next) = do
     filesOrErr <- SIE.tryIOError $ SD.getDirectoryContents path
@@ -58,13 +44,6 @@ fileSysIOF (GetDirectoryContents path next) = do
     return $ next result
 fileSysIOF (Pwd next) = SD.getCurrentDirectory >>= (fmap return next)
 
-teletypeIOF :: TeletypeAPI a -> IO a
-teletypeIOF (Print x next) = P.putStrLn x >> return next
-teletypeIOF (GetChar result) = getChar >>= (fmap return result)
-
-environmentIOF :: EnvironmentAPI a -> IO a
-environmentIOF (GetArgs next) = SE.getArgs >>= (fmap return next)
-
 runIOF :: (TeletypeAPI :+: FileSystemAPI :+: EnvironmentAPI) a -> IO a
 runIOF (Inl teletype) = teletypeIOF teletype
 runIOF (Inr (Inl filesys)) = fileSysIOF filesys
@@ -73,23 +52,9 @@ runIOF (Inr (Inr environment)) = environmentIOF environment
 runIO :: F.Free (TeletypeAPI :+: FileSystemAPI :+: EnvironmentAPI) a -> IO a
 runIO = F.foldFree runIOF
 
-getLine :: (TeletypeAPI :<: f) => F.Free f String
-getLine = do
-    c <- F.liftF . inject $ (GetChar id)
-    if c == '\n'
-       then return ""
-       else getLine >>= \line -> return (c : line)
-
-getArgs :: (EnvironmentAPI :<: f) => F.Free f [String]
-getArgs = F.liftF . inject $ GetArgs id
 
 pwd :: (FileSystemAPI :<: f) => F.Free f String
 pwd = F.liftF . inject $ Pwd id
-
-teletypeString :: String -> TeletypeAPI a -> ([String], a)
-teletypeString [] (GetChar result) = ([],  '\0') >>= (fmap return result)
-teletypeString (x : xs) (GetChar result) = ([], x) >>= (fmap return result)
-teletypeString _ (Print text next) = ([text], next)
 
 data Tree a = Node a [Tree a]
 
@@ -109,26 +74,6 @@ data LsOptions = LsOptions
     , fileArgument :: Maybe String
     }
 
-data (f :+: g) e = Inl (f e) | Inr (g e)
-
-infixr 6 :+:
-
-instance (Functor f, Functor g) => Functor (f :+: g) where
-    fmap f (Inl x) = Inl $ fmap f x
-    fmap f (Inr x) = Inr $ fmap f x
-
-class (Functor f, Functor g) => (:<:) f g where
-    inject :: f a -> g a
-
-instance Functor f => f :<: f where
-    inject = id
-
-instance (Functor f, Functor g) => f :<: (f :+: g) where
-    inject = Inl
-
-instance {-# OVERLAPPABLE #-} (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
-    inject = Inr . inject
-
 lsOptions :: OA.Parser LsOptions
 lsOptions = LsOptions 
     <$> OA.switch ( OA.long "verbose" <> OA.short 'v' <> OA.help "Turn on verbose output." )
@@ -140,36 +85,35 @@ lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "L
 getProgramArgs :: TeletypeAPI :<: f => F.Free f [String]
 getProgramArgs = fmap return getLine
 
-handleParserTeletype :: (TeletypeAPI :<: f) => OA.ParserResult a -> F.Free f (Either String a)
-handleParserTeletype (OA.Success a) = return . Right $ a
-handleParserTeletype (OA.Failure failure) = do
-    let programName = "ls"
+handleParserTeletype :: (TeletypeAPI :<: f) => String -> OA.ParserResult a -> F.Free f (Either String a)
+handleParserTeletype _ (OA.Success a) = return . Right $ a
+handleParserTeletype programName (OA.Failure failure) = do
     let (msg, exit) = OA.renderFailure failure programName
     return (Left msg)
 
-execParserTeletype :: (TeletypeAPI :<: f, EnvironmentAPI :<: f) => OA.ParserInfo a -> F.Free f (Either String a)
-execParserTeletype info = do
+execParserTeletype :: (TeletypeAPI :<: f, EnvironmentAPI :<: f) => String -> OA.ParserInfo a -> F.Free f (Either String a)
+execParserTeletype programName info = do
     programArgs <- getArgs
     let result = OA.execParserPure OA.defaultPrefs info programArgs
-    handleParserTeletype result
+    handleParserTeletype programName result
 
 lsF :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => F.Free f ()
 lsF = do
-    lsOpts <- execParserTeletype lsOptionsInfo
+    lsOpts <- execParserTeletype "ls" lsOptionsInfo
     case lsOpts of
-         Left error -> F.hoistFree inject $ print error
+         Left error -> putStrLn error
          Right opts -> lsFWithOpts opts
 
 lsFWithOpts :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f) => LsOptions -> F.Free f ()
 lsFWithOpts opts = do
-    _ <- if (verboseFlag opts) then F.hoistFree inject $ print "verbose!" else return()
+    _ <- if (verboseFlag opts) then putStrLn "verbose!" else return ()
     path <- case fileArgument opts of
                  Nothing -> pwd
                  Just pathArg -> return pathArg
     allElemsOrErr <- F.hoistFree inject (getDirectoryContents path)
     case allElemsOrErr of 
-         Right allElems -> F.liftF . inject $ Print (unlines allElems) ()
-         Left (DoesNotExist path) -> F.liftF . inject $ Print (path ++ " does not exist!") ()
+         Right allElems -> putStrLn (unlines allElems)
+         Left (DoesNotExist path) -> putStrLn (path ++ " does not exist!")
 
 -- And we can run this with runIOA ls
 
