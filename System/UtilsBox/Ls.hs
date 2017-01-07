@@ -2,8 +2,6 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
--- This is scary, let's think about how to remove it...
-{-# LANGUAGE OverlappingInstances #-}
 module System.UtilsBox.Ls where
 
 import Prelude hiding (getLine, print)
@@ -136,7 +134,7 @@ instance Functor f => f :<: f where
 instance (Functor f, Functor g) => f :<: (f :+: g) where
     inject = Inl
 
-instance (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
+instance {-# OVERLAPPABLE #-} (Functor f, Functor g, Functor h, f :<: g) => f :<: (h :+: g) where
     inject = Inr . inject
 
 lsOptions :: OA.Parser LsOptions
