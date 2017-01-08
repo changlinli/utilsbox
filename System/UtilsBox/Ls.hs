@@ -8,7 +8,6 @@ import Prelude hiding (getLine, putStrLn)
 import qualified Prelude as P
 
 import qualified Control.Monad.Free as F
-import           Control.Monad.State
 import qualified System.Directory as SD
 import qualified System.IO.Error as SIE
 import qualified Options.Applicative as OA
