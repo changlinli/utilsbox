@@ -34,9 +34,6 @@ lsOptions = LsOptions
 lsOptionsInfo :: OA.ParserInfo LsOptions
 lsOptionsInfo = OA.info (OA.helper <*> lsOptions) (OA.fullDesc <> OA.progDesc "List all files in a directory" <> OA.header "ls: A utility for listing files" )
 
-getProgramArgs :: (TeletypeAPI :<: f) => F.Free f [String]
-getProgramArgs = fmap return getLine
-
 lsF :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f, ExitAPI :<: f) => F.Free f ()
 lsF = do
     lsOpts <- execParserFreeExit "ls" lsOptionsInfo
