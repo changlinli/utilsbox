@@ -57,11 +57,10 @@ executable utilsbox
   -- other-extensions:    
   
   -- Other library packages from which modules are imported.
-  build-depends:       base >=4.9 && <4.10,
+  build-depends:       base >=4.8 && <4.10,
                        free == 4.*,
                        optparse-applicative >= 0.12 && < 0.14,
-                       IOSpec == 0.3.*,
-                       cryptonite == 0.21
+                       cryptonite >= 0.16 && <= 0.21
   
   -- Directories containing source files.
   -- hs-source-dirs:      
