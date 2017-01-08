@@ -18,7 +18,7 @@ import           System.UtilsBox.Optparse (execParserFreeExit)
 import           System.UtilsBoxSpec.CoreTypes ((:<:), inject, (:+:) (Inl, Inr))
 import           System.UtilsBoxSpec.Teletype (TeletypeAPI, putStrLn, getLine, teletypeIOF)
 import           System.UtilsBoxSpec.Environment
-import           System.UtilsBoxSpec.Exit (ExitAPI)
+import           System.UtilsBoxSpec.Exit (ExitAPI, exitFailure)
 import           System.UtilsBoxSpec.FileSystem (FileSystemAPI, getDirectoryContents, getCurrentDirectory, DirError (..))
 import           System.UtilsBoxSpec.Interpreter (runIOF, runIO)
 
@@ -52,7 +52,7 @@ lsFWithOpts opts = do
     allElemsOrErr <- getDirectoryContents path
     case allElemsOrErr of
          Right allElems -> putStrLn (unlines allElems)
-         Left (DoesNotExist path) -> putStrLn (path ++ " does not exist!")
+         Left (DoesNotExist nonexistentPath) -> putStrLn (nonexistentPath ++ " does not exist!") *> exitFailure
 
 lsIO :: IO ()
 lsIO = runIO lsF
