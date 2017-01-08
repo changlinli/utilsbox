@@ -27,6 +27,8 @@ hits and how robustness in general works.
 Building the Project
 --------------------
 
+### Using Nix
+
 The easiest way to build both the GHC and GHCJS parts of this project is to use
 Nix. To pull down all the dependencies for GHC, we can simply use the following:
 
@@ -35,3 +37,22 @@ Nix. To pull down all the dependencies for GHC, we can simply use the following:
 To pull down all the dependencies for GHCJS, change the compiler to "ghcjs."
 
     nix-shell --arg compiler "\"ghcjs\"" .
+
+### Using Stack
+
+If you have `stack` installed, you can run the following from within this
+repository.
+
+    stack setup
+    stack build
+    stack exec utilsbox
+
+### Using Cabal
+
+If you prefer to use `cabal` sandboxes, you can run the following from within
+this repository.
+
+    cabal sandbox init
+    cabal configure
+    cabal build
+    cabal run
