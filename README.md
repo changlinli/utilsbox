@@ -23,3 +23,15 @@ Another reason is to explore how well free monads work in a "real life" system.
 Coreutils exercises enough interesting functionality that we can explore how
 IO-heavy systems work in a free monad world, as well as investigate performance
 hits and how robustness in general works.
+
+Building the Project
+--------------------
+
+The easiest way to build both the GHC and GHCJS parts of this project is to use
+Nix. To pull down all the dependencies for GHC, we can simply use the following:
+
+    nix-shell .
+
+To pull down all the dependencies for GHCJS, change the compiler to "ghcjs."
+
+    nix-shell --arg compiler "\"ghcjs\"" .
