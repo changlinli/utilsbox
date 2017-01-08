@@ -4,15 +4,16 @@
 
 module Main where
 
-import Prelude hiding (getLine, putStrLn)
-import qualified Prelude as P
-
 import qualified Control.Monad.Free as F
-import           System.UtilsBoxSpec.CoreTypes ((:<:), inject, (:+:) (Inl, Inr))
-import           System.UtilsBoxSpec.Teletype (TeletypeAPI, putStrLn, teletypeIOF)
+import           System.UtilsBoxSpec.CoreTypes ((:<:))
+import           System.UtilsBoxSpec.Teletype (TeletypeAPI)
 import           System.UtilsBoxSpec.Environment
+import           System.UtilsBoxSpec.Exit (ExitAPI)
+import           System.UtilsBoxSpec.FileSystem (FileSystemAPI)
+import           System.UtilsBoxSpec.Interpreter (runIO)
 import           System.UtilsBox.Ls
 import           System.UtilsBox.Echo
+import           System.UtilsBox.Optparse (execParserFreeExit)
 import qualified Options.Applicative as OA
 import           Data.Monoid
 
@@ -31,16 +32,14 @@ mainOptions = OA.subparser (mconcat subcommands)
 mainOptionsInfo :: OA.ParserInfo MainOptions
 mainOptionsInfo = OA.info (OA.helper <*> mainOptions) (OA.fullDesc <> OA.progDesc "A collection of many tools inspired by BusyBox" <> OA.header "A collection of many tools")
 
-mainUtilsBoxF :: (TeletypeAPI :<: f, EnvironmentAPI :<: f, FileSystemAPI :<: f) => F.Free f ()
+mainUtilsBoxF :: (TeletypeAPI :<: f, EnvironmentAPI :<: f, FileSystemAPI :<: f, ExitAPI :<: f) => F.Free f ()
 mainUtilsBoxF = do
-    optsOrErr <- System.UtilsBox.Ls.execParserTeletype "utilsbox" mainOptionsInfo
-    case optsOrErr of
-         Left err -> putStrLn err
-         Right opts -> case opts of
-                            Ls lsOpts -> lsFWithOpts lsOpts
-                            Echo echoOpts -> echoFWithOpts echoOpts
+    opts <- execParserFreeExit "utilsbox" mainOptionsInfo
+    case opts of
+         Ls lsOpts -> lsFWithOpts lsOpts
+         Echo echoOpts -> echoFWithOpts echoOpts
 
-mainF :: (TeletypeAPI :<: f, EnvironmentAPI :<: f, FileSystemAPI :<: f) => F.Free f ()
+mainF :: (TeletypeAPI :<: f, EnvironmentAPI :<: f, FileSystemAPI :<: f, ExitAPI :<: f) => F.Free f ()
 mainF = do
     progName <- getProgName
     case progName of
@@ -49,4 +48,4 @@ mainF = do
          _ -> mainUtilsBoxF
 
 main :: IO ()
-main = System.UtilsBox.Ls.runIO mainF
+main = runIO mainF
