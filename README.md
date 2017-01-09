@@ -6,18 +6,18 @@ Busybox is; that is it is a single executable with many subcommands which can be
 executed either an argument to the executable, or by calling the execuatble by a
 certain name.
 
-    utilsbox true
+    utilsbox echo "Hello World!"
     # or equivalently
-    ln -s /$UTILSBOX_INSTALL_LOCATION/utilsbox true
-    true
+    ln -s /$UTILSBOX_INSTALL_LOCATION/utilsbox echo
+    ./echo "Hello World!"
 
 Why?
 ----
 
 There are two reasons for the existence of these programs. The first is that we
-have a suite of tools that can run in any environment that Javascript can. This
-is especially useful for having a toy web-based console that you can use to play
-around with things on a virtual filesystem.
+have a suite of tools that can run in any environment that Javascript can
+(thanks to GHCJS). This is especially useful for having a toy web-based console
+that you can use to play around with things on a virtual filesystem.
 
 Another reason is to explore how well free monads work in a "real life" system.
 Coreutils exercises enough interesting functionality that we can explore how
