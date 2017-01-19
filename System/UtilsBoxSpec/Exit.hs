@@ -21,3 +21,6 @@ exitSuccess = F.liftF . inject $ ExitProgram (SE.ExitSuccess)
 
 exitIOF :: ExitAPI a -> IO a
 exitIOF (ExitProgram exitCode) = SE.exitWith exitCode
+
+exitPureF :: ExitAPI a -> SE.ExitCode
+exitPureF (ExitProgram exitCode) = exitCode
