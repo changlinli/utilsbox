@@ -57,4 +57,5 @@ example = do
     putStrNew [y]
     return [x, y]
 
-exampleExec = F.iterA (silenceAndFeed 'c') example
+exampleExec :: String
+exampleExec = F.iter (silenceAndFeed 'c') example
