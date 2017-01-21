@@ -71,7 +71,9 @@ executable utilsbox
                        directory == 1.*,
                        free == 4.*,
                        optparse-applicative >= 0.12 && < 0.14,
-                       cryptonite >= 0.16 && <= 0.21
+                       cryptonite >= 0.16 && <= 0.21,
+                       terminal-size == 0.3.*,
+                       wcwidth == 0.0.2
   
   -- Directories containing source files.
   -- hs-source-dirs:      
