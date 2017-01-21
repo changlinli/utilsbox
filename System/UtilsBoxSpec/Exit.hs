@@ -10,13 +10,13 @@ import           System.UtilsBoxSpec.CoreTypes ((:<:), inject)
 
 data ExitAPI a = ExitProgram (SE.ExitCode) deriving Functor
 
-exitWith :: (ExitAPI :<: f) => SE.ExitCode ->  F.Free f a
+exitWith :: (ExitAPI :<: f, F.MonadFree f m) => SE.ExitCode ->  m a
 exitWith code = F.liftF . inject $ ExitProgram code
 
-exitFailure :: (ExitAPI :<: f) => F.Free f a
+exitFailure :: (ExitAPI :<: f, F.MonadFree f m) => m a
 exitFailure = F.liftF . inject $ ExitProgram (SE.ExitFailure 1)
 
-exitSuccess :: (ExitAPI :<: f) => F.Free f a
+exitSuccess :: (ExitAPI :<: f, F.MonadFree f m) => m a
 exitSuccess = F.liftF . inject $ ExitProgram (SE.ExitSuccess)
 
 exitIOF :: ExitAPI a -> IO a
