@@ -20,6 +20,7 @@ import           System.UtilsBoxSpec.Environment
 import           System.UtilsBoxSpec.Exit (ExitAPI, exitFailure)
 import           System.UtilsBoxSpec.FileSystem (FileSystemAPI, getDirectoryContents, getCurrentDirectory, DirError (..))
 import           System.UtilsBoxSpec.Interpreter (runIOF, runIO)
+import           Data.Char.WCWidth (wcwidth)
 
 data LsOptions = LsOptions
     { verboseFlag :: Bool
@@ -38,6 +39,21 @@ lsF :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f, ExitAPI :<
 lsF = do
     lsOpts <- execParserFreeExit "ls" lsOptionsInfo
     lsFWithOpts lsOpts
+
+totalWidth :: String -> Int
+totalWidth = sum . fmap wcwidth
+
+pad :: Int -> String -> String
+pad maxLength xs = if totalWidth xs < maxLength then xs ++ padding else xs
+  where
+    padding = replicate (maxLength - totalWidth xs) ' '
+
+{-formatAsColumns :: Int -> [String] -> String-}
+{-formatAsColumns maxWidth items = -}
+  {-where-}
+    {-firstRow :: [String]-}
+    {-firstRow = undefined-}
+    {-headerLengths = -}
 
 lsFWithOpts :: (TeletypeAPI :<: f, FileSystemAPI :<: f, EnvironmentAPI :<: f, ExitAPI :<: f) => LsOptions -> F.Free f ()
 lsFWithOpts opts = do
