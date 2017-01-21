@@ -22,13 +22,13 @@ data FileSystemAPI next
     | GetCurrentDirectory (String -> next) 
     deriving Functor
 
-getDirectoryContents :: (FileSystemAPI :<: f) => String -> F.Free f (Either DirError [String])
+getDirectoryContents :: (FileSystemAPI :<: f, F.MonadFree f m) => String -> m (Either DirError [String])
 getDirectoryContents path = F.liftF . inject $ GetDirectoryContents path id
 
-getCurrentDirectory :: (FileSystemAPI :<: f) => F.Free f String
+getCurrentDirectory :: (FileSystemAPI :<: f, F.MonadFree f m) => m String
 getCurrentDirectory = F.liftF . inject $ GetCurrentDirectory id
 
-renamePath :: (FileSystemAPI :<: f) => String -> String -> F.Free f (Either DirError ())
+renamePath :: (FileSystemAPI :<: f, F.MonadFree f m) => String -> String -> m (Either DirError ())
 renamePath original newname = F.liftF . inject $ RenamePath original newname id
 
 fileSystemIOF :: FileSystemAPI a -> IO a
